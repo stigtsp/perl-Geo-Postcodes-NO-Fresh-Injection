@@ -1,0 +1,45 @@
+#!/usr/bin/env perl
+
+use strict;
+use LWP::Simple;
+use Storable qw(nstore retrieve);
+use File::Copy;
+
+my $file = '/tmp/postcode-data';
+
+my $url = 'http://epab.posten.no/Norsk/Nedlasting/_Files/tilbud5';
+my $data = get($url);
+
+my $out;
+
+  my %fix_type; $fix_type{B} = 'STBX'; # The keys (e.g. 'B') are used in the  #
+                $fix_type{F} = 'MU';   #   postcode file ('tilbud5').         #
+                $fix_type{G} = 'ST';   # The values (e.g. 'STBX') are the     #
+                $fix_type{K} = 'IO';   #   codes used by the Geo::Postcodes   #
+                $fix_type{P} = 'BX';   #   modules.                           #
+                $fix_type{S} = 'SX';
+
+
+ foreach (split(/\n/, $data)) {
+    tr/’\235\217µ/ÆØÅÁ/; # Fix curious coding of 8-bit characters in 'tilbud5'.
+
+    my ($postcode, $location, $borough_number, $borough, $type) = unpack("A4A32A4A30A", $_);
+
+    $out->{location}->{$postcode} = $location;
+    $out->{borough_number}->{$postcode} = $borough_number;
+    $out->{borough}->{$borough_number} = $borough;
+    $out->{type}->{$postcode} = $fix_type{$type};
+  }
+
+
+use Data::Dumper;
+print Dumper $out;
+#simple sanity test
+die "Error in generated structure" unless ($out->{location}->{1533} eq 'MOSS');
+
+use Data::Dumper;
+print Dumper $out->{location}->{1640};
+
+nstore($out, $file.".saving") && move($file.".saving", $file);
+
+
